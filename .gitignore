@@ -131,3 +131,4 @@ dmypy.json
 ###############################################################################
 # Project specific ignores
 config.py
+state.txt

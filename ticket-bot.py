@@ -20,9 +20,9 @@ async def on_ready():
     print(bot.user.id)
     print('------')
 
-################################################################################
+###############################################################################
 ## Bot commands
-################################################################################
+###############################################################################
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -40,12 +40,12 @@ async def on_raw_reaction_remove(payload):
     pass
 
 
-async def unwrap_payload(payload):
-    rp = ReactionPayload()
-    await rp._init(payload)
-    return rp
-
-
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Handles creation of tickets on reactions to the ticketmenu
+##############################
 async def create_ticket(rp):
     await rp.message.remove_reaction(Emojis.envelope_with_arrow, rp.member)
 
@@ -79,7 +79,8 @@ async def create_ticket(rp):
                                             overwrites    = overwrites)
 
     # Post starting message
-    ticket = Ticket(ticket_id, game_name, rp.member, support_role, rp.guild)
+    ticket = Ticket(ticket_id, game_name, rp.member,
+                    support_role, rp.guild)
 
     message = await channel.send("", embed = ticket.to_embed())
     await message.add_reaction(Emojis.lock)
@@ -89,23 +90,38 @@ async def create_ticket(rp):
     await ticket.log_channel.send("", embed = embed)
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Locks tickets, removing write access from everyone
+##############################
 async def lock_ticket(rp):
-    ticket = await Ticket.from_start_message(rp)
+    ticket = await Ticket.from_start_message(rp.message)
 
     # only allow reactions from support staff and the author
     if ticket.staff not in rp.member.roles \
         and ticket.author != rp.member:
-            rp.message.remove_reaction(Emojis.lock, rp.member)
+            await rp.message.remove_reaction(rp.emoji, rp.member)
             return
 
+    # Update reactions
     await rp.message.clear_reactions()
+    await rp.message.add_reaction(Emojis.unlock)
 
+    # Update permissions
     await rp.channel.set_permissions(ticket.staff,
                                read_messages = True,
                                send_messages = False)
     await rp.channel.set_permissions(ticket.author,
                                read_messages = True,
                                send_messages = False)
+    for add_members in ticket.additional_members:
+        await rp.channel.set_permissions(add_members,
+                                    read_messages = True,
+                                    send_messages = False)
+
+    # Post closing message
     embed = discord.Embed.from_dict({
         "title"         : "Ticket closed",
         "color"         : 0xFFFF00,
@@ -115,20 +131,54 @@ async def lock_ticket(rp):
     embed.add_field(name = "Closed by", value = rp.member.mention, inline = True)
     message = await rp.channel.send("", embed = embed)
 
+
     # Post log message
-    embed = ticket.to_log_embed("Locked", 0xFFFF00, [("Locked by", rp.member.mention)])
+    embed = ticket.to_log_embed("Locked", 0xFF5E00, [("Locked by", rp.member.mention)])
     await ticket.log_channel.send("", embed = embed)
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Unlocks tickets, granting write access to the appropriate members
+##############################
 async def unlock_ticket(rp):
-    ticket = await Ticket.from_start_message(rp)
+    ticket = await Ticket.from_start_message(rp.message)
 
     # only allow reactions from support staff and the author
     if ticket.staff not in rp.member.roles:
-        rp.message.remove_reaction(Emojis.lock, rp.member)
+        await rp.message.remove_reaction(rp.emoji, rp.member)
         return
 
+    # Update reactions
+    await rp.message.clear_reactions()
+    await rp.message.add_reaction(Emojis.lock)
 
+    # Update permissions
+    await rp.channel.set_permissions(ticket.staff,
+                               read_messages = True,
+                               send_messages = True)
+    await rp.channel.set_permissions(ticket.author,
+                               read_messages = True,
+                               send_messages = True)
+    for add_members in ticket.additional_members:
+        await rp.channel.set_permissions(add_members,
+                                    read_messages = True,
+                                    send_messages = True)
+
+    # Post closing message
+    embed = discord.Embed.from_dict({
+        "title"         : "Ticket re-opened",
+        "color"         : 0xFFFF00,
+    })
+    embed.add_field(name = "Re-opened by", value = rp.member.mention, inline = True)
+    message = await rp.channel.send("", embed = embed)
+
+
+    # Post log message
+    embed = ticket.to_log_embed("Unlocked", 0xFFD900, [("Unlocked by", rp.member.mention)])
+    await ticket.log_channel.send("", embed = embed)
 
 
 @bot.command() # TODO remove
@@ -143,12 +193,33 @@ async def cleartickets(ctx):
             await channel.delete()
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Invites a third-party member to the ticket
+##############################
 @bot.command()
 async def invite(ctx, user : discord.User):
     # TODO: restrict role
+    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
+    ticket = await Ticket.from_start_message(start_message)
+
+    # only allow reactions from support staff and the author
+    if ticket.staff not in ctx.author.roles:
+        raise commands.MissingRole(ticket.staff.name)
+
     await ctx.channel.set_permissions(user,
                                       read_messages = True,
-                                      send_message = True)
+                                      send_messages = True)
+    await ticket.add_members(user, start_message)
+    await ctx.send("Added %s to this ticket." % user.mention)
+
+    # Post log message
+    embed = ticket.to_log_embed("Invite", 0xFF5E00,
+                                [("Inviter", ctx.author.mention),
+                                ("Invitee", user.mention)])
+    await ticket.log_channel.send("", embed = embed)
 
 
 @invite.error
@@ -163,6 +234,12 @@ async def invite_error(ctx, error):
     await handle_error(ctx, error, error_handlers)
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Creates a new ticket menu
+##############################
 @bot.command()
 @commands.has_role(BOT_TICKET_MANAGER_ROLE)
 async def ticketmenu(ctx, game_name : str, category_id : int,
@@ -214,15 +291,15 @@ async def handle_error(ctx, error, error_handlers):
     raise error
 
 
-################################################################################
+###############################################################################
 ## Utility functions and classes
-################################################################################
+###############################################################################
 
 ##############################
 # Author: Tim | w4rum
 # DateCreated: 11/13/2019
 # Purpose: Send an error message to the current chat
-###############################
+##############################
 def send_error_unknown(ctx):
     return send_error(ctx, "Unknown error. Tell someone from the programming" \
                       + " team to check the logs.")
@@ -232,7 +309,7 @@ def send_error_unknown(ctx):
 # Author: Tim | w4rum
 # DateCreated: 11/13/2019
 # Purpose: Send an error message to the current chat
-###############################
+##############################
 def send_error(ctx, text):
     return ctx.send("[ERROR] " + text)
 
@@ -241,14 +318,23 @@ def send_error(ctx, text):
 # Author: Tim | w4rum
 # DateCreated: 11/13/2019
 # Purpose: Send a usage help to the current chat
-###############################
+##############################
 def send_usage_help(ctx, function_name, argument_structure):
     return ctx.send("Usage: `%s%s %s`" \
                     % (BOT_CMD_PREFIX, function_name, argument_structure))
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Class representing basic information of a ticket
+#          Can be used to create the starting message embed and can be
+#          reconstructed from that embed.
+##############################
 class Ticket():
-    def __init__(self, ticket_id, game_name, author, staff, guild):
+    def __init__(self, ticket_id, game_name, author,
+                 staff, guild, additional_members = set()):
         self.id = ticket_id
         self.game = game_name
         self.author = author
@@ -259,28 +345,36 @@ class Ticket():
         transcript_channel_id\
             = get_state()["ticket_types"][self.game]["transcript_channel_id"]
         self.transcript_channel = guild.get_channel(transcript_channel_id)
+        self.additional_members = additional_members
 
-    async def from_start_message(rp):
-        embed = rp.message.embeds[0]
+    async def from_start_message(message):
+        embed = message.embeds[0]
 
         # fucking kill me please this is horrible coding
+        add_members = set()
         for f in embed.fields:
             if f.name == Strings.field_id: ticket_id = int(f.value)
             if f.name == Strings.field_game: game = f.value
             if f.name == Strings.field_author:
                 author_id = int(f.value[2:-1])
-                author = await rp.guild.fetch_member(author_id)
+                author = await message.guild.fetch_member(author_id)
             if f.name == Strings.field_staff:
                 staff_id = int(f.value[3:-1])
-                staff = rp.guild.get_role(staff_id)
+                staff = message.guild.get_role(staff_id)
+            if f.name == Strings.field_additional_members:
+                add_members = f.value.split(" ")
+                add_members = [await message.guild.fetch_member(id[2:-1])
+                             for id in add_members]
+                add_members = set(add_members)
 
-        return Ticket(ticket_id, game, author, staff, rp.guild)
+        return Ticket(ticket_id, game, author, staff,
+                      message.guild, add_members)
 
     def to_embed(self):
         embed = discord.Embed.from_dict({
             "title"         : "Ticket ID: %d" % self.id,
             "color"         : 0x00FF00,
-            "description"   : "If your issue has been resovled, you can close"\
+            "description"   : "If your issue has been resolved, you can close"\
                               + " this ticket with %s." % Emojis.lock
         })
         embed.add_field(name = Strings.field_id, value = self.id, inline = True)
@@ -289,6 +383,11 @@ class Ticket():
                         value = self.author.mention, inline = True)
         embed.add_field(name = Strings.field_staff,
                         value = self.staff.mention, inline = True)
+        if len(self.additional_members) > 0:
+            s = " ".join([x.mention for x in self.additional_members])
+            embed.add_field(name = Strings.field_additional_members,
+                            value = s, inline = True)
+
         return embed
 
     def to_log_embed(self, log_prefix, color, additional_fields=[]):
@@ -303,9 +402,18 @@ class Ticket():
 
         return embed
 
+    async def add_members(self, user, message):
+        self.additional_members.add(user)
+        await message.edit(embed = self.to_embed())
 
+
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Compensates for having to use on_raw_reaction_add
+##############################
 class ReactionPayload():
-
     # this might be a bit heavy on the API
     async def _init(self, payload):
         self.guild = bot.get_guild(payload.guild_id)
@@ -313,6 +421,12 @@ class ReactionPayload():
         self.emoji = payload.emoji
         self.channel = bot.get_channel(payload.channel_id)
         self.message = await self.channel.fetch_message(payload.message_id)
+
+
+async def unwrap_payload(payload):
+    rp = ReactionPayload()
+    await rp._init(payload)
+    return rp
 
 
 class Emojis():
@@ -326,13 +440,22 @@ class Strings():
     field_game = "Game"
     field_author = "Ticket author"
     field_staff = "Responsible support staff"
+    field_additional_members = "Additional members"
+
 
 emoji_handlers = {
     Emojis.envelope_with_arrow  : create_ticket,
     Emojis.lock                 : lock_ticket,
+    Emojis.unlock               : unlock_ticket,
 }
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Handles persistent storage
+##############################
 def get_state():
     # default state
     state = json.dumps({
