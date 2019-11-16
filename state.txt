@@ -1,0 +1,1 @@
+{"ticket_counter": 54, "ticket_types": {"Squad": {"category_id": 643984441123012618, "log_channel_id": 645081195306287104, "transcript_channel_id": 645081242135429129, "support_role_id": 645081076494106624}, "Morduhauwe": {"category_id": 643984441123012618, "log_channel_id": 645104361961291806, "transcript_channel_id": 645104380756099072, "support_role_id": 645104526801633330}}}
