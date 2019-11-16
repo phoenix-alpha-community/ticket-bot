@@ -6,9 +6,13 @@ import typing
 import json
 import os.path
 import re
+import io
 from discord.ext import commands
 from config import *  # imports token, description etc.
 from random import randrange
+from tempfile import TemporaryFile
+from importlib import import_module
+ce = import_module("chat-exporter")
 
 bot = commands.Bot(command_prefix=BOT_CMD_PREFIX, description=BOT_DESCRIPTION)
 
@@ -108,6 +112,7 @@ async def lock_ticket(rp):
     # Update reactions
     await rp.message.clear_reactions()
     await rp.message.add_reaction(Emojis.unlock)
+    await rp.message.add_reaction(Emojis.no_entry_sign)
 
     # Update permissions
     await rp.channel.set_permissions(ticket.staff,
@@ -129,8 +134,23 @@ async def lock_ticket(rp):
                           + " %s." % ticket.staff.mention
     })
     embed.add_field(name = "Closed by", value = rp.member.mention, inline = True)
+    embed.add_field(name = "Transcript saved to",
+                    value = ticket.transcript_channel.mention, inline = True)
     message = await rp.channel.send("", embed = embed)
 
+    # Delete previous transcripts
+    async for m in ticket.transcript_channel.history(limit=None):
+        for e in m.embeds:
+            match = re.match(r"Transcript: Ticket ([0-9]+)", e.title)
+            if match != None and int(match.group(1)) == ticket.id:
+                await m.delete()
+
+    # Save transcript
+    embed = ticket.to_log_embed("Transcript", 0xFF5E00, [("Saved by", rp.member.mention)])
+    transcript = await ce.generate_transcript(rp.channel, ticket)
+    f = discord.File(io.BytesIO(transcript.encode()),
+                     filename = "transcript-%012d.html" % ticket.id)
+    await ticket.transcript_channel.send("", embed = embed, file = f)
 
     # Post log message
     embed = ticket.to_log_embed("Locked", 0xFF5E00, [("Locked by", rp.member.mention)])
@@ -181,6 +201,53 @@ async def unlock_ticket(rp):
     await ticket.log_channel.send("", embed = embed)
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Makes tickets more like what happened at Tiananmen square
+##############################
+async def delete_ticket(rp):
+    ticket = await Ticket.from_start_message(rp.message)
+
+    # only allow reactions from support staff and the author
+    if ticket.staff not in rp.member.roles:
+        await rp.message.remove_reaction(rp.emoji, rp.member)
+        return
+
+    await rp.message.remove_reaction(rp.emoji, rp.member)
+    await rp.message.add_reaction(Emojis.negative_squared_cross_mark)
+    await rp.message.add_reaction(Emojis.white_check_mark)
+
+
+async def delete_confirm(rp):
+    ticket = await Ticket.from_start_message(rp.message)
+
+    # only allow reactions from support staff and the author
+    if ticket.staff not in rp.member.roles:
+        await rp.message.remove_reaction(rp.emoji, rp.member)
+        return
+
+    await rp.channel.delete()
+
+    # Post log message
+    embed = ticket.to_log_embed("Deleted", 0xFF0000, [("Deleted by", rp.member.mention)])
+    await ticket.log_channel.send("", embed = embed)
+
+
+async def delete_abort(rp):
+    ticket = await Ticket.from_start_message(rp.message)
+
+    # only allow reactions from support staff and the author
+    if ticket.staff not in rp.member.roles:
+        await rp.message.remove_reaction(rp.emoji, rp.member)
+        return
+
+    await rp.message.remove_reaction(rp.emoji, rp.member)
+    await rp.message.remove_reaction(Emojis.negative_squared_cross_mark, rp.guild.me)
+    await rp.message.remove_reaction(Emojis.white_check_mark, rp.guild.me)
+
+
 @bot.command() # TODO remove
 async def gib(ctx, shit):
     print(shit.encode())
@@ -191,6 +258,14 @@ async def cleartickets(ctx):
     for channel in ctx.guild.channels:
         if channel.name.startswith("ticket-"):
             await channel.delete()
+
+
+@bot.command() # TODO: remove
+async def dump(ctx):
+    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
+    ticket = await Ticket.from_start_message(start_message)
+    with open("test.html", "w") as f:
+        f.write(await ce.generate_transcript(ctx.channel, ticket))
 
 
 ##############################
@@ -430,9 +505,13 @@ async def unwrap_payload(payload):
 
 
 class Emojis():
-    envelope_with_arrow = b'\xf0\x9f\x93\xa9'.decode()
-    lock                = b'\xf0\x9f\x94\x92'.decode()
-    unlock              = b'\xf0\x9f\x94\x93'.decode()
+    envelope_with_arrow         = b'\xf0\x9f\x93\xa9'.decode()
+    lock                        = b'\xf0\x9f\x94\x92'.decode()
+    unlock                      = b'\xf0\x9f\x94\x93'.decode()
+    flag_eu                     = b'\xf0\x9f\x87\xaa\xf0\x9f\x87\xba'.decode()
+    white_check_mark            = b'\xe2\x9c\x85'.decode()
+    negative_squared_cross_mark = b'\xe2\x9d\x8e'.decode()
+    no_entry_sign               = b'\xf0\x9f\x9a\xab'.decode()
 
 
 class Strings():
@@ -444,9 +523,12 @@ class Strings():
 
 
 emoji_handlers = {
-    Emojis.envelope_with_arrow  : create_ticket,
-    Emojis.lock                 : lock_ticket,
-    Emojis.unlock               : unlock_ticket,
+    Emojis.envelope_with_arrow          : create_ticket,
+    Emojis.lock                         : lock_ticket,
+    Emojis.unlock                       : unlock_ticket,
+    Emojis.no_entry_sign                : delete_ticket,
+    Emojis.white_check_mark             : delete_confirm,
+    Emojis.negative_squared_cross_mark  : delete_abort,
 }
 
 

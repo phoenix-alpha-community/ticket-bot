@@ -132,3 +132,5 @@ dmypy.json
 # Project specific ignores
 config.py
 state.txt
+shitsheet.html
+test.html
