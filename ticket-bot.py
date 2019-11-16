@@ -24,6 +24,7 @@ async def on_ready():
     print(bot.user.id)
     print('------')
 
+
 ###############################################################################
 ## Bot commands
 ###############################################################################
@@ -261,26 +262,32 @@ async def delete_abort(rp):
     await rp.message.remove_reaction(Emojis.white_check_mark, rp.guild.me)
 
 
-@bot.command() # TODO remove
-async def gib(ctx, shit):
-    print(shit.encode())
+#@bot.command() # TODO remove
+#async def gib(ctx, shit):
+#    print(shit.encode())
 
 
-@bot.command() # TODO: remove
-async def cleartickets(ctx):
-    for channel in ctx.guild.channels:
-        if channel.name.startswith("ticket-"):
-            await channel.delete()
+#@bot.command() # TODO: remove
+#async def cleartickets(ctx):
+#    for channel in ctx.guild.channels:
+#        if channel.name.startswith("ticket-"):
+#            await channel.delete()
 
 
-@bot.command() # TODO: remove
-async def dump(ctx):
-    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
-    ticket = await Ticket.from_start_message(start_message)
-    with open("test.html", "w") as f:
-        f.write(await ce.generate_transcript(ctx.channel, ticket))
+#@bot.command() # TODO: remove
+#async def dump(ctx):
+#    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
+#    ticket = await Ticket.from_start_message(start_message)
+#    with open("test.html", "w") as f:
+#        f.write(await ce.generate_transcript(ctx.channel, ticket))
 
 
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/13/2019
+# Purpose: Recounts all users' tickets, possibly fixing limit issues
+##############################
 @bot.command()
 @commands.has_role(BOT_TICKET_MANAGER_ROLE)
 async def recount(ctx):
@@ -323,6 +330,7 @@ async def recount(ctx):
         "description"   : description,
     })
     await ctx.send("", embed = embed)
+
 
 @recount.error
 async def recount_error(ctx, error):
@@ -490,6 +498,7 @@ class Ticket():
         self.transcript_channel = guild.get_channel(transcript_channel_id)
         self.additional_members = additional_members
 
+
     async def from_start_message(message):
         embed = message.embeds[0]
 
@@ -516,6 +525,7 @@ class Ticket():
         return Ticket(ticket_id, game, author, staff,
                       message.guild, add_members)
 
+
     def to_embed(self):
         embed = discord.Embed.from_dict({
             "title"         : "Ticket ID: %d" % self.id,
@@ -536,6 +546,7 @@ class Ticket():
 
         return embed
 
+
     def to_log_embed(self, log_prefix, color, additional_fields=[]):
         embed = discord.Embed.from_dict({
             "title"         : "%s: Ticket %d" % (log_prefix, self.id),
@@ -547,6 +558,7 @@ class Ticket():
             embed.add_field(name = name, value = value, inline = True)
 
         return embed
+
 
     async def add_members(self, user, message):
         self.additional_members.add(user)
@@ -638,6 +650,7 @@ def get_and_inc_ticket_counter():
 
     return state["ticket_counter"]
 
+
 def get_user_ticket_count(user):
     state = get_state()
     counts = state["user_ticket_count"]
@@ -648,10 +661,12 @@ def get_user_ticket_count(user):
 
     return c
 
+
 def inc_user_ticket_count(user):
     state = get_state()
     state["user_ticket_count"][str(user.id)] += 1
     write_state(state)
+
 
 def dec_user_ticket_count(user):
     state = get_state()
