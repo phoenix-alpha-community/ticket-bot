@@ -53,6 +53,15 @@ async def on_raw_reaction_remove(payload):
 async def create_ticket(rp):
     await rp.message.remove_reaction(Emojis.envelope_with_arrow, rp.member)
 
+    # check if user is over ticket limit
+    count = get_user_ticket_count(rp.member)
+    if count >= BOT_TICKET_MAX_PER_USER:
+        await rp.member.send("You're over ticket limit: %i/%i"\
+                       % (count, BOT_TICKET_MAX_PER_USER))
+        return
+    else:
+        inc_user_ticket_count(rp.member)
+
     title = rp.message.embeds[0].title
     pattern = r"Ticket Menu: ([^\n]+)"
     game_name = re.match(pattern, title).group(1)
@@ -109,6 +118,8 @@ async def lock_ticket(rp):
             await rp.message.remove_reaction(rp.emoji, rp.member)
             return
 
+    dec_user_ticket_count(ticket.author)
+
     # Update reactions
     await rp.message.clear_reactions()
     await rp.message.add_reaction(Emojis.unlock)
@@ -149,7 +160,7 @@ async def lock_ticket(rp):
     embed = ticket.to_log_embed("Transcript", 0xFF5E00, [("Saved by", rp.member.mention)])
     transcript = await ce.generate_transcript(rp.channel, ticket)
     f = discord.File(io.BytesIO(transcript.encode()),
-                     filename = "transcript-%012d.html" % ticket.id)
+                     filename = "transcript-%04d.html" % ticket.id)
     await ticket.transcript_channel.send("", embed = embed, file = f)
 
     # Post log message
@@ -166,7 +177,9 @@ async def lock_ticket(rp):
 async def unlock_ticket(rp):
     ticket = await Ticket.from_start_message(rp.message)
 
-    # only allow reactions from support staff and the author
+    inc_user_ticket_count(ticket.author)
+
+    # only allow reactions from support staff
     if ticket.staff not in rp.member.roles:
         await rp.message.remove_reaction(rp.emoji, rp.member)
         return
@@ -266,6 +279,61 @@ async def dump(ctx):
     ticket = await Ticket.from_start_message(start_message)
     with open("test.html", "w") as f:
         f.write(await ce.generate_transcript(ctx.channel, ticket))
+
+
+@bot.command()
+@commands.has_role(BOT_TICKET_MANAGER_ROLE)
+async def recount(ctx):
+    old_counts = get_state()["user_ticket_count"]
+    counts = {}
+    for channel in ctx.guild.channels:
+        if channel.name.startswith("ticket-"):
+            start_message = (await channel.history(limit=1, oldest_first=True).flatten())[0]
+            ticket = await Ticket.from_start_message(start_message)
+            if str(ticket.author.id) not in counts:
+                counts[str(ticket.author.id)] = 0
+            counts[str(ticket.author.id)] += 1
+
+    state = get_state()
+    state["user_ticket_count"] = counts
+    write_state(state)
+
+    fixes = 0
+    description = "\n"
+    for id, c in old_counts.items():
+        difference = 0
+        if id not in counts and c != 0:
+            fixes += 1
+            difference = c
+        elif id in counts and c != counts[id]:
+            fixes += 1
+            difference = c - counts[id]
+
+        if difference > 0:
+            description += "- Fixed %s: %d\n"\
+                % (await ctx.guild.fetch_member(int(id)), difference)
+
+
+    if fixes == 0:
+        description += "No changes."
+
+    embed = discord.Embed.from_dict({
+        "title"         : "Recount finished",
+        "color"         : 0x00FFFF,
+        "description"   : description,
+    })
+    await ctx.send("", embed = embed)
+
+@recount.error
+async def recount_error(ctx, error):
+    error_handlers = {
+        commands.errors.MissingRequiredArgument: lambda:
+            send_usage_help(ctx, "recount", ""),
+
+        commands.MissingRole: lambda:
+            ctx.send("Insufficient rank permissions."),
+    }
+    await handle_error(ctx, error, error_handlers)
 
 
 ##############################
@@ -431,7 +499,10 @@ class Ticket():
             if f.name == Strings.field_id: ticket_id = int(f.value)
             if f.name == Strings.field_game: game = f.value
             if f.name == Strings.field_author:
-                author_id = int(f.value[2:-1])
+                if f.value[2] == "!":
+                    author_id = int(f.value[3:-1])
+                else:
+                    author_id = int(f.value[2:-1])
                 author = await message.guild.fetch_member(author_id)
             if f.name == Strings.field_staff:
                 staff_id = int(f.value[3:-1])
@@ -542,7 +613,8 @@ def get_state():
     # default state
     state = json.dumps({
         "ticket_counter" : 0,
-        "ticket_types" : {}
+        "ticket_types" : {},
+        "user_ticket_count" : {},
     })
 
     # read state
@@ -565,6 +637,26 @@ def get_and_inc_ticket_counter():
     write_state(state)
 
     return state["ticket_counter"]
+
+def get_user_ticket_count(user):
+    state = get_state()
+    counts = state["user_ticket_count"]
+    if str(user.id) not in counts:
+        counts[str(user.id)] = 0
+    c = counts[str(user.id)]
+    write_state(state)
+
+    return c
+
+def inc_user_ticket_count(user):
+    state = get_state()
+    state["user_ticket_count"][str(user.id)] += 1
+    write_state(state)
+
+def dec_user_ticket_count(user):
+    state = get_state()
+    state["user_ticket_count"][str(user.id)] -= 1
+    write_state(state)
 
 
 if __name__ == "__main__":
