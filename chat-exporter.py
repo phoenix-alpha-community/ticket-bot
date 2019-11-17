@@ -2,7 +2,6 @@ import html
 from pytz import timezone
 import re
 import discord
-from markdown import markdown
 
 eastern = timezone("US/Eastern")
 utc     = timezone("UTC")
