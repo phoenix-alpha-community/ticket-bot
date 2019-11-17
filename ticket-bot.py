@@ -351,6 +351,9 @@ async def recount_error(ctx, error):
 ##############################
 @bot.command()
 async def invite(ctx, user: discord.User):
+    if not ctx.channel.name.startswith("ticket"):
+        raise WrongChannelError()
+
     start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
     ticket = await Ticket.from_start_message(start_message)
 
@@ -380,6 +383,8 @@ async def invite_error(ctx, error):
         send_usage_help(ctx, "kick", "@USER"),
         commands.MissingRole: lambda:
         ctx.send("Insufficient rank permissions."),
+        WrongChannelError: lambda:
+        ctx.send("Command used in wrong channel"),
     }
     await handle_error(ctx, error, error_handlers)
 
@@ -391,6 +396,8 @@ async def invite_error(ctx, error):
 ##############################
 @bot.command()
 async def kick(ctx, user: discord.User):
+    if not ctx.channel.name.startswith("ticket"):
+        raise WrongChannelError()
     start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
     ticket = await Ticket.from_start_message(start_message)
 
@@ -422,6 +429,8 @@ async def kick_error(ctx, error):
         send_usage_help(ctx, "kick", "@USER"),
         UserNotInTicketError: lambda:
         ctx.send("User not in ticket."),
+        WrongChannelError: lambda:
+        ctx.send("Command used in wrong channel"),
         commands.MissingRole: lambda:
         ctx.send("Insufficient rank permissions."),
     }
@@ -719,6 +728,10 @@ def dec_user_ticket_count(user):
 
 
 class UserNotInTicketError(commands.CommandError):
+    pass
+
+
+class WrongChannelError(commands.CommandError):
     pass
 
 if __name__ == "__main__":
