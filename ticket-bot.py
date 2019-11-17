@@ -351,7 +351,7 @@ async def recount_error(ctx, error):
 ##############################
 @bot.command()
 async def invite(ctx, user: discord.User):
-    if not ctx.channel.name.startswith("ticket"):
+    if not ctx.channel.name.startswith("ticket-"):
         raise WrongChannelError()
 
     start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
@@ -396,7 +396,7 @@ async def invite_error(ctx, error):
 ##############################
 @bot.command()
 async def kick(ctx, user: discord.User):
-    if not ctx.channel.name.startswith("ticket"):
+    if not ctx.channel.name.startswith("ticket-"):
         raise WrongChannelError()
     start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
     ticket = await Ticket.from_start_message(start_message)
