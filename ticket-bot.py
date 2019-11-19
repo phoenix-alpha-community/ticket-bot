@@ -267,19 +267,19 @@ async def delete_abort(rp):
 #    print(shit.encode())
 
 
-# @bot.command() # TODO: cleartickets
-# async def cleartickets(ctx):
-#    for channel in ctx.guild.channels:
-#        if channel.name.startswith("ticket-"):
-#            await channel.delete()
+@bot.command() # TODO: cleartickets
+async def cleartickets(ctx):
+    for channel in ctx.guild.channels:
+        if channel.name.startswith("ticket-"):
+            await channel.delete()
 
 
-# @bot.command() # TODO: bullshit
-# async def dump(ctx):
-#    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
-# #    ticket = await Ticket.from_start_message(start_message)
-# #    with open("test.html", "w") as f:
-#        f.write(await ce.generate_transcript(ctx.channel, ticket))
+@bot.command() # TODO: bullshit
+async def dump(ctx):
+    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
+    ticket = await Ticket.from_start_message(start_message)
+    with open("test.html", "w") as f:
+        f.write(await ce.generate_transcript(ctx.channel, ticket))
 
 
 ##############################
