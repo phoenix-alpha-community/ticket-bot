@@ -38,7 +38,8 @@ async def on_raw_reaction_add(payload):
     if rp.message.author != rp.guild.me:
         return
 
-    await emoji_handlers[rp.emoji.name](rp)
+    if rp.emoji.name in emoji_handlers.keys():
+        await emoji_handlers[rp.emoji.name](rp)
 
 
 @bot.event
@@ -219,7 +220,7 @@ async def unlock_ticket(rp):
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
 # DateCreated: 11/13/2019
-# Purpose: Makes tickets more like what happened at Tiananmen square
+# Purpose: Deletes tickets
 ##############################
 async def delete_ticket(rp):
     ticket = await Ticket.from_start_message(rp.message)
@@ -471,13 +472,15 @@ async def ticketmenu(ctx, game_name: str, category_id: int,
 
 @ticketmenu.error
 async def ticketmenu_error(ctx, error):
-    error_handlers = {
-        commands.errors.MissingRequiredArgument: lambda:
-        send_usage_help(ctx, "ticketmenu", "GAME_NAME CATEGORY_ID" \
+    argument_syntax = "GAME_NAME CATEGORY_ID" \
                         + " #LOG_CHANNEL" \
                         + " #TRANSCRIPT_CHANNEL" \
-                        + " @SUPPORT_ROLE"),
-
+                        + " @SUPPORT_ROLE"
+    error_handlers = {
+        commands.errors.MissingRequiredArgument: lambda:
+        send_usage_help(ctx, "ticketmenu", argument_syntax),
+        commands.errors.BadArgument: lambda:
+        send_usage_help(ctx, "ticketmenu", argument_syntax),
         commands.MissingRole: lambda:
         ctx.send("Insufficient rank permissions."),
     }
