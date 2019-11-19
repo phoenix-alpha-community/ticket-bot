@@ -155,6 +155,8 @@ async def lock_ticket(rp):
     # Delete previous transcripts
     async for m in ticket.transcript_channel.history(limit=None):
         for e in m.embeds:
+            if type(e.title) != str:
+                continue
             match = re.match(r"Transcript: Ticket ([0-9]+)", e.title)
             if match != None and int(match.group(1)) == ticket.id:
                 await m.delete()
