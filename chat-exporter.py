@@ -11,7 +11,7 @@ async def generate_transcript(channel, ticket):
 
     messages_html = ""
     for m in messages:
-        time_format = "%b %-d, %Y %-I:%M %p"
+        time_format = "%b %d, %Y %I:%M %p"
         time_string_created = utc.localize(m.created_at).astimezone(eastern)
         time_string_created = time_string_created.strftime(time_format)
         if m.edited_at != None:

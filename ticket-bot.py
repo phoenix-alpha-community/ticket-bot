@@ -71,7 +71,7 @@ async def create_ticket(rp):
     ticket_type = get_state()["ticket_types"][game_name]
     support_role = rp.guild.get_role(ticket_type["support_role_id"])
 
-    category = rp.guild.get_channel(BOT_TICKET_CATEGORY)
+    category = rp.guild.get_channel(ticket_type["category_id"])
     overwrites = {
         rp.guild.default_role:
             discord.PermissionOverwrite(read_messages=False,
