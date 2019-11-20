@@ -5,6 +5,7 @@
 
 ## Dependencies
 - [discord.py](https://github.com/Rapptz/discord.py)
+- pytz
 
 You can install these via `pip install -r requirements.txt`
 
