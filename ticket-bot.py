@@ -50,7 +50,7 @@ async def on_raw_reaction_remove(payload):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Handles creation of tickets on reactions to the ticketmenu
 ##############################
 async def create_ticket(rp):
@@ -109,7 +109,7 @@ async def create_ticket(rp):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Locks tickets, removing write access from everyone
 ##############################
 async def lock_ticket(rp):
@@ -176,7 +176,7 @@ async def lock_ticket(rp):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Unlocks tickets, granting write access to the appropriate members
 ##############################
 async def unlock_ticket(rp):
@@ -221,7 +221,7 @@ async def unlock_ticket(rp):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Deletes tickets
 ##############################
 async def delete_ticket(rp):
@@ -269,6 +269,10 @@ async def delete_abort(rp):
 # async def gib(ctx, shit):
 #    print(shit.encode())
 
+@bot.command() # TODO: cleartickets
+async def shit(ctx):
+    start_message = (await ctx.channel.history(limit=2, oldest_first=True).flatten())[1]
+    print(start_message.content.encode())
 
 @bot.command() # TODO: cleartickets
 async def cleartickets(ctx):
@@ -288,7 +292,7 @@ async def dump(ctx):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Recounts all users' tickets, possibly fixing limit issues
 ##############################
 @bot.command()
@@ -349,7 +353,7 @@ async def recount_error(ctx, error):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Invites a third-party member to the ticket
 ##############################
 @bot.command()
@@ -381,9 +385,9 @@ async def invite(ctx, user: discord.User):
 async def invite_error(ctx, error):
     error_handlers = {
         commands.errors.MissingRequiredArgument: lambda:
-        send_usage_help(ctx, "kick", "@USER"),
+        send_usage_help(ctx, "invite", "@USER"),
         commands.errors.BadArgument: lambda:
-        send_usage_help(ctx, "kick", "@USER"),
+        send_usage_help(ctx, "invite", "@USER"),
         commands.MissingRole: lambda:
         ctx.send("Insufficient rank permissions."),
         WrongChannelError: lambda:
@@ -443,7 +447,7 @@ async def kick_error(ctx, error):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Creates a new ticket menu
 ##############################
 @bot.command()
@@ -535,7 +539,7 @@ def send_usage_help(ctx, function_name, argument_structure):
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Class representing basic information of a ticket
 #          Can be used to create the starting message embed and can be
 #          reconstructed from that embed.
@@ -564,17 +568,14 @@ class Ticket():
             if f.name == Strings.field_id: ticket_id = int(f.value)
             if f.name == Strings.field_game: game = f.value
             if f.name == Strings.field_author:
-                if f.value[2] == "!":
-                    author_id = int(f.value[3:-1])
-                else:
-                    author_id = int(f.value[2:-1])
+                author_id = user_snowflake_to_id(f.value)
                 author = await message.guild.fetch_member(author_id)
             if f.name == Strings.field_staff:
                 staff_id = int(f.value[3:-1])
                 staff = message.guild.get_role(staff_id)
             if f.name == Strings.field_additional_members:
                 add_members = f.value.split(" ")
-                add_members = [await message.guild.fetch_member(id[2:-1])
+                add_members = [await message.guild.fetch_member(user_snowflake_to_id(id))
                                for id in add_members]
                 add_members = set(add_members)
 
@@ -623,10 +624,17 @@ class Ticket():
         await message.edit(embed=self.to_embed())
 
 
+def user_snowflake_to_id(snowflake):
+    if snowflake[2] == "!":
+        return int(snowflake[3:-1])
+    else:
+        return int(snowflake[2:-1])
+
+
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Compensates for having to use on_raw_reaction_add
 ##############################
 class ReactionPayload():
@@ -676,7 +684,7 @@ emoji_handlers = {
 ##############################
 # Author: Tim | w4rum
 # Social and emotional support and a few good ones: Matt | Mahtoid
-# DateCreated: 11/13/2019
+# DateCreated: 11/16/2019
 # Purpose: Handles persistent storage
 ##############################
 def get_state():

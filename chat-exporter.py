@@ -1,3 +1,22 @@
+################################################################################
+#
+#                               !!! WARNING !!!
+# The following code is a highly concentrated mixture of all known forms of
+# cancerous tumors. It started off as a quick-fix for a missing python-based
+# chat export function and then underwent heavy refactoring in an attempt to
+# make it acceptable. Which kind of failed. Proceed at your own risk.
+#
+################################################################################
+
+##############################
+# Author: Tim | w4rum
+# Social and emotional support and a few good ones: Matt | Mahtoid
+# DateCreated: 11/20/2019
+# Purpose: Generate a transcript from a channel
+#          Output based on the C# Discord chat exporter by Tyrrrz
+#          https://github.com/Tyrrrz/DiscordChatExporter
+##############################
+
 import html
 from pytz import timezone
 import re
@@ -6,8 +25,6 @@ from markdown import markdown
 
 eastern = timezone("US/Eastern")
 utc     = timezone("UTC")
-
-no_parser = []
 
 async def generate_transcript(channel, ticket):
     guild = channel.guild
@@ -45,8 +62,8 @@ async def generate_transcript(channel, ticket):
                 ("EMBED_G", str(e.colour.g)),
                 ("EMBED_B", str(e.colour.b)),
                 ("EMBED_TITLE", e.title),
-                ("EMBED_DESC", desc),
-                ("EMBED_FIELDS", fields, False),
+                ("EMBED_DESC", desc, PARSE_MODE_MARKDOWN),
+                ("EMBED_FIELDS", fields, []),
 
             ])
             embeds += cur_embed
@@ -67,63 +84,158 @@ async def generate_transcript(channel, ticket):
             ("AVATAR_URL", str(m.author.avatar_url)),
             ("NAME_TAG", "%s#%s" % (m.author.name, m.author.discriminator)),
             ("NAME", m.author.name),
-            ("BOT_TAG", ze_bot_tag, no_parser),
+            ("BOT_TAG", ze_bot_tag, PARSE_MODE_NONE),
             ("TIMESTAMP", time_string_final),
             ("MESSAGE_ID", str(m.id)),
             ("MESSAGE_CONTENT", m.content),
-            ("EMBEDS", embeds, no_parser),
-            ("ATTACHMENTS", attachments, no_parser),
+            ("EMBEDS", embeds, PARSE_MODE_NONE),
+            ("ATTACHMENTS", attachments, PARSE_MODE_NONE),
         ])
 
         messages_html += cur_msg
 
     transcript = await fill_out(channel, total, [
         ("SERVER_NAME", guild.name),
-        ("SERVER_AVATAR_URL", guild.icon, no_parser)
+        ("SERVER_AVATAR_URL", str(guild.icon_url), PARSE_MODE_NONE),
         ("CHANNEL_NAME", "Ticket %d" % ticket.id),
         ("MESSAGE_COUNT", str(len(messages))),
-        ("MESSAGES", messages_html, no_parser),
+        ("MESSAGES", messages_html, PARSE_MODE_NONE),
     ])
 
     return transcript
 
-async def mentions_pre_parser(content, guild):
-    pass # TODO
 
-async def mentions_post_parser(content, guild):
-    # parse mentions
-    # roles
-    for match in re.finditer("<@&([0-9]+)>", content):
-        role_id = int(match.group(1))
-        role = guild.get_role(role_id)
-        content = content.replace(content[match.start():match.end()], "@%s" % role.name)
-    # members
-    for match in re.finditer("<@!?([0-9]+)>", content):
-        id = int(match.group(1))
-        member = await guild.fetch_member(id)
-        content = content.replace(content[match.start():match.end()], "@%s" % member)
-    # channels
-    for match in re.finditer("<#([0-9]+)>", content):
-        id = int(match.group(1))
-        channel = guild.get_channel(id)
-        content = content.replace(content[match.start():match.end()], "#%s" % channel)
-    # custom emoji
-    for match in re.finditer("<a?(:[^\n:]+:)[0-9]+>", content):
-        name = match.group(1)
-        content = content.replace(content[match.start():match.end()], name)
+REGEX_ROLES     = r"<@&([0-9]+)>"
+REGEX_MEMBERS   = r"<@!?([0-9]+)>"
+REGEX_CHANNELS  = r"<#([0-9]+)>"
+REGEX_EMOJIS    = r"<a?(:[^\n:]+:)[0-9]+>"
+
+ESCAPE_LT       = "______lt______"
+ESCAPE_GT       = "______gt______"
+ESCAPE_AMP      = "______amp______"
+
+async def escape_mentions(content, guild):
+    for match in re.finditer("(%s|%s|%s|%s)" \
+                             % (REGEX_ROLES, REGEX_MEMBERS, REGEX_CHANNELS,
+                                REGEX_EMOJIS), content):
+        pre_content     = content[:match.start()]
+        post_content    = content[match.end():]
+        match_content   = content[match.start():match.end()]
+
+        match_content   = match_content.replace("<", ESCAPE_LT)
+        match_content   = match_content.replace(">", ESCAPE_GT)
+        match_content   = match_content.replace("&", ESCAPE_AMP)
+
+        content         = pre_content + match_content + post_content
 
     return content
 
+
+async def unescape_mentions(content, guild):
+    content   = content.replace(ESCAPE_LT, "<")
+    content   = content.replace(ESCAPE_GT, ">")
+    content   = content.replace(ESCAPE_AMP, "&")
+    return content
+
+
+async def parse_mentions(content, guild):
+    # parse mentions
+    # channels
+    offset = 0
+    for match in re.finditer(REGEX_CHANNELS, content):
+        id = int(match.group(1))
+        channel = guild.get_channel(id)
+        replacement = '<span class="mention" title="%s">#%s</span>' \
+                      % (channel.name, channel.name)
+        content = content.replace(content[match.start()+offset:match.end()+offset],
+                                  replacement)
+        offset += len(replacement) - (match.end() - match.start())
+    # roles
+    offset = 0
+    for match in re.finditer(REGEX_ROLES, content):
+        role_id = int(match.group(1))
+        role = guild.get_role(role_id)
+        replacement = '<span style="color: #%02x%02x%02x;">@%s</span>' \
+                      % (role.color.r, role.color.g, role.color.b, role.name)
+        content = content.replace(content[match.start()+offset:match.end()+offset],
+                                  replacement)
+        offset += len(replacement) - (match.end() - match.start())
+
+    # members
+    offset = 0
+    for match in re.finditer(REGEX_MEMBERS, content):
+        id = int(match.group(1))
+        member = await guild.fetch_member(id)
+        replacement = '<span class="mention" title="%s">@%s</span>' \
+                      % (member, member.nick or member.name)
+        content = content.replace(content[match.start()+offset:match.end()+offset],
+                                  replacement)
+        offset += len(replacement) - (match.end() - match.start())
+
+    # custom emoji
+    offset = 0
+    for match in re.finditer(REGEX_EMOJIS, content):
+        name = match.group(1)
+        replacement = name
+        content = content.replace(content[match.start()+offset:match.end()+offset],
+                                  replacement)
+        offset += len(replacement) - (match.end() - match.start())
+
+    return content
+
+
+async def escape_html(content, guild):
+    return html.escape(content)
+
+
+async def parse_markdown(content, guild):
+    # We know of markdown.markdown but that thing has more features than
+    # Discord markdown (inserting <p> on encountering multiple breaks), which
+    # can not be disabled.
+
+    # __underline__
+    for match in re.finditer(r"__([^<>]+)__", content):
+        affected_text = match.group(1)
+        content = content.replace(content[match.start():match.end()],
+                                  '<span style="text-decoration: underline">%s</span>' % affected_text)
+    # *italic*
+    for match in re.finditer(r"\*\*([^<>]+)\*\*", content):
+        affected_text = match.group(1)
+        content = content.replace(content[match.start():match.end()],
+                                  '<strong>%s</strong>' % affected_text)
+    # **bold**
+    for match in re.finditer(r"\*([^<>]+)\*", content):
+        affected_text = match.group(1)
+        content = content.replace(content[match.start():match.end()],
+                                  '<em>%s</em>' % affected_text)
+    # ~~strikethrough~~
+    for match in re.finditer(r"~~([^<>]+)~~", content):
+        affected_text = match.group(1)
+        content = content.replace(content[match.start():match.end()],
+                                  '<span style="text-decoration: line-through">%s</span>' % affected_text)
+    return content
+
+PARSE_MODE_NONE         = 0
+PARSE_MODE_NO_MARKDOWN  = 1
+PARSE_MODE_MARKDOWN     = 2
+
 async def fill_out(channel, base, replacements):
     for r in replacements:
-        if len(p) == 2: # default case: html escape only
+        if len(r) == 2: # default case
             k, v = r
-            v = html.escape(v)
-        else:
-            k, v, parser = r
-            for p in parser:
-                v = p(v)
+            r = (k, v, PARSE_MODE_MARKDOWN)
 
+        k, v, mode = r
+        parser = [escape_mentions, escape_mentions,
+                    unescape_mentions, parse_mentions]
+
+        if mode == PARSE_MODE_MARKDOWN:
+            parser.append(parse_markdown)
+        elif mode == PARSE_MODE_NONE:
+            parser = []
+
+        for p in parser:
+            v = await p(v, channel.guild)
 
         base = base.replace("{{" + k + "}}", v)
 
@@ -137,66 +249,10 @@ def read_file(filename):
     return s
 
 
-total = read_file("chat-exporter-resources/base.html")
-
-msg = r"""
-        <div class="chatlog__message-group">
-            <div class="chatlog__author-avatar-container">
-                <img class="chatlog__author-avatar" src="{{AVATAR_URL}}" />
-            </div>
-            <div class="chatlog__messages">
-                <span class="chatlog__author-name" title="{{NAME_TAG}}" data-user-id="644128496469147658">{{NAME}}</span>
-
-                {{BOT_TAG}}
-
-                <span class="chatlog__timestamp">{{TIMESTAMP}}</span>
-
-                    <div class="chatlog__message " data-message-id="{{MESSAGE_ID}}" id="message-{{MESSAGE_ID}}">
-                        <div class="chatlog__content">
-                            <span class="markdown">{{MESSAGE_CONTENT}}</span>
-
-                        </div>
-
-                        {{EMBEDS}}
-
-                        {{ATTACHMENTS}}
-
-                    </div>
-            </div>
-        </div>
-    """
-
-bot_tag = """<span class="chatlog__bot-tag">BOT</span>"""
-
-
-msg_embed = r"""
-            <div class=chatlog__embed>
-                <div class=chatlog__embed-color-pill style=background-color:rgba({{EMBED_R}},{{EMBED_G}},{{EMBED_B}},1)></div>
-                <div class=chatlog__embed-content-container>
-                    <div class=chatlog__embed-content>
-                        <div class=chatlog__embed-text>
-                            <div class="chatlog__embed-title">
-                                    <span class="markdown">{{EMBED_TITLE}}</span>
-                            </div>
-                            <div class=chatlog__embed-description><span class=markdown>{{EMBED_DESC}}</span></div>
-                            {{EMBED_FIELDS}}
-                        </div>
-                    </div>
-                </div>
-            </div>"""
-
-msg_embed_field = r"""
-<div class="chatlog__embed-fields">
-        <div class="chatlog__embed-field  chatlog__embed-field--inline ">
-                <div class="chatlog__embed-field-name"><span class="markdown">{{EMBED_FIELD_NAME}}</span></div>
-                <div class="chatlog__embed-field-value"><span class="markdown">{{EMBED_FIELD_VALUE}}</span></div>
-        </div>
-</div>"""
-
-
-msg_attachment = r"""
-<div class=chatlog__attachment>
-    <a href={{ATTACH_URL}}><img class=chatlog__attachment-thumbnail src={{ATTACH_URL_THUMB}}></a>
-</div>
-"""
+total           = read_file("chat-exporter-resources/base.html")
+msg             = read_file("chat-exporter-resources/message.html")
+bot_tag         = read_file("chat-exporter-resources/bot-tag.html")
+msg_embed       = read_file("chat-exporter-resources/message-embed.html")
+msg_embed_field = read_file("chat-exporter-resources/message-embed-field.html")
+msg_attachment  = read_file("chat-exporter-resources/message-attachment.html")
 
