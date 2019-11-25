@@ -56,6 +56,18 @@ async def on_raw_reaction_remove(payload):
 async def create_ticket(rp):
     await rp.message.remove_reaction(Emojis.envelope_with_arrow, rp.member)
 
+    title = rp.message.embeds[0].title
+    pattern = r"Ticket Menu: ([^\n]+)"
+    game_name = re.match(pattern, title).group(1)
+
+    ticket_type = get_state()["ticket_types"][game_name]
+
+    # check if category is at channel limit
+    category = rp.guild.get_channel(ticket_type["category_id"])
+    if len(category.channels) >= 50:
+        await rp.member.send("Sorry, the ticket category is full. (50 max.)")
+        return
+
     # check if user is over ticket limit
     count = get_user_ticket_count(rp.member)
     if count >= BOT_TICKET_MAX_PER_USER:
@@ -65,14 +77,8 @@ async def create_ticket(rp):
     else:
         inc_user_ticket_count(rp.member)
 
-    title = rp.message.embeds[0].title
-    pattern = r"Ticket Menu: ([^\n]+)"
-    game_name = re.match(pattern, title).group(1)
-
-    ticket_type = get_state()["ticket_types"][game_name]
     support_role = rp.guild.get_role(ticket_type["support_role_id"])
 
-    category = rp.guild.get_channel(ticket_type["category_id"])
     overwrites = {
         rp.guild.default_role:
             discord.PermissionOverwrite(read_messages=False,
@@ -269,7 +275,7 @@ async def delete_abort(rp):
 # async def gib(ctx, shit):
 #    print(shit.encode())
 
-#@bot.command() # TODO: cleartickets
+#@bot.command() # TODO: shit
 #async def shit(ctx):
 #    start_message = (await ctx.channel.history(limit=2, oldest_first=True).flatten())[1]
 #    print(start_message.content.encode())
