@@ -303,6 +303,8 @@ async def recount(ctx):
     for channel in ctx.guild.channels:
         if channel.name.startswith("ticket-"):
             start_message = (await channel.history(limit=1, oldest_first=True).flatten())[0]
+            if any([r.emoji == Emojis.unlock for r in start_message.reactions]):
+                continue # ignore locked tickets
             ticket = await Ticket.from_start_message(start_message)
             if str(ticket.author.id) not in counts:
                 counts[str(ticket.author.id)] = 0
@@ -323,7 +325,7 @@ async def recount(ctx):
             fixes += 1
             difference = c - counts[id]
 
-        if difference > 0:
+        if difference != 0:
             description += "- Fixed %s: %d\n" \
                            % (await ctx.guild.fetch_member(int(id)), difference)
 
