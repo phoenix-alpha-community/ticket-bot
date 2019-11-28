@@ -139,13 +139,15 @@ async def lock_ticket(rp):
     await rp.channel.set_permissions(ticket.staff,
                                      read_messages=True,
                                      send_messages=False)
-    await rp.channel.set_permissions(ticket.author,
-                                     read_messages=True,
-                                     send_messages=False)
-    for add_members in ticket.additional_members:
-        await rp.channel.set_permissions(add_members,
-                                         read_messages=True,
-                                         send_messages=False)
+    if not isinstance(ticket.author, FakeMember):
+        await rp.channel.set_permissions(ticket.author,
+                                        read_messages=True,
+                                        send_messages=False)
+    for add_member in ticket.additional_members:
+        if not isinstance(add_member, FakeMember):
+            await rp.channel.set_permissions(add_member,
+                                            read_messages=True,
+                                            send_messages=False)
 
     # Post closing message
     embed = discord.Embed.from_dict({
@@ -227,13 +229,15 @@ async def unlock_ticket(rp):
     await rp.channel.set_permissions(ticket.staff,
                                      read_messages=True,
                                      send_messages=True)
-    await rp.channel.set_permissions(ticket.author,
-                                     read_messages=True,
-                                     send_messages=True)
-    for add_members in ticket.additional_members:
-        await rp.channel.set_permissions(add_members,
-                                         read_messages=True,
-                                         send_messages=True)
+    if not isinstance(ticket.author, FakeMember):
+        await rp.channel.set_permissions(ticket.author,
+                                        read_messages=True,
+                                        send_messages=True)
+    for add_member in ticket.additional_members:
+        if not isinstance(add_member, FakeMember):
+            await rp.channel.set_permissions(add_members,
+                                            read_messages=True,
+                                            send_messages=True)
 
     # Post closing message
     embed = discord.Embed.from_dict({
@@ -301,11 +305,7 @@ async def delete_abort(rp):
 
 #@bot.command() # TODO: shit
 #async def shit(ctx):
-#    embed = discord.Embed.from_dict({
-#        "title": "title",
-#        "color": 0xFFFF00,
-#    })
-#    message = await ctx.send("s", embed=embed)
+#    await ctx.send(bot.user.avatar_url)
 
 
 #@bot.command() # TODO: cleartickets
@@ -361,7 +361,8 @@ async def recount(ctx):
 
         if difference != 0:
             description += "- Fixed %s: %d\n" \
-                           % (await ctx.guild.fetch_member(int(id)), difference)
+                           % (ctx.guild.get_member(int(id)) \
+                              or FakeMember(int(id), ctx.guild), difference)
 
     if fixes == 0:
         description += "No changes."
@@ -605,13 +606,15 @@ class Ticket():
             if f.name == Strings.field_game: game = f.value
             if f.name == Strings.field_author:
                 author_id = user_snowflake_to_id(f.value)
-                author = await message.guild.fetch_member(author_id)
+                author = message.guild.get_member(author_id) \
+                    or FakeMember(author_id, message.guild)
             if f.name == Strings.field_staff:
                 staff_id = int(f.value[3:-1])
                 staff = message.guild.get_role(staff_id)
             if f.name == Strings.field_additional_members:
                 add_members = f.value.split(" ")
-                add_members = [await message.guild.fetch_member(user_snowflake_to_id(id))
+                add_members = [message.guild.get_member(user_snowflake_to_id(id)) \
+                               or FakeMember(id, message.guild)
                                for id in add_members]
                 add_members = set(add_members)
 
@@ -629,7 +632,8 @@ class Ticket():
         embed.add_field(name=Strings.field_id, value=self.id, inline=True)
         embed.add_field(name=Strings.field_game, value=self.game, inline=True)
         embed.add_field(name=Strings.field_author,
-                        value=self.author.mention, inline=True)
+                        value=FakeMember(133713371337, self.staff.guild).mention, inline=True)
+                        #value=self.author.mention, inline=True)
         embed.add_field(name=Strings.field_staff,
                         value=self.staff.mention, inline=True)
         if len(self.additional_members) > 0:
@@ -677,10 +681,12 @@ class ReactionPayload():
     # this might be a bit heavy on the API
     async def _init(self, payload):
         self.guild = bot.get_guild(payload.guild_id)
-        self.member = await self.guild.fetch_member(payload.user_id)
+        self.member = self.guild.get_member(payload.user_id) \
+            or FakeMember(payload.user_id, self.guild)
         self.emoji = payload.emoji
         self.channel = bot.get_channel(payload.channel_id)
         self.message = await self.channel.fetch_message(payload.message_id)
+        self.avatar_url = "https://cdn.discordapp.com/embed/avatars/4.png"
 
 
 async def unwrap_payload(payload):
@@ -715,6 +721,19 @@ emoji_handlers = {
     Emojis.white_check_mark: delete_confirm,
     Emojis.negative_squared_cross_mark: delete_abort,
 }
+
+
+class FakeMember():
+    def __init__(self, id, guild):
+        self.nick = "(user that left)"
+        self.name = self.nick
+        self.id = id
+        self.guild = guild
+        self.mention = f"<@{id}>"
+        self.bot = False
+
+    def __str__(self):
+        return self.nick
 
 
 ##############################

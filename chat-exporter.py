@@ -21,6 +21,7 @@ import html
 from pytz import timezone
 import re
 import discord
+from ticket_bot import FakeMember
 
 eastern = timezone("US/Eastern")
 utc     = timezone("UTC")
@@ -174,7 +175,7 @@ async def parse_mentions(content, guild):
     offset = 0
     for match in re.finditer(REGEX_MEMBERS, content):
         id = int(match.group(1))
-        member = await guild.fetch_member(id)
+        member = guild.get_member(id) or FakeMember(id, guild)
         replacement = '<span class="mention" title="%s">@%s</span>' \
                       % (member, member.nick or member.name)
         content = content.replace(content[match.start()+offset:match.end()+offset],
