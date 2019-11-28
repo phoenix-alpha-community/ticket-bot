@@ -53,14 +53,24 @@ async def generate_transcript(channel, ticket):
                 ])
                 fields += cur_field
 
-            desc = e.description
-            if desc == discord.Embed.Empty:
-                desc = ""
+
+            # default values for embeds need explicit setting because
+            # Embed.empty breaks just about everything
+            title = e.title \
+                if e.title != discord.Embed.Empty \
+                else ""
+            r, g, b = (e.colour.r, e.colour.g, e.colour.b) \
+                if e.colour != discord.Embed.Empty \
+                else (0x20, 0x22, 0x25) # default colour
+            desc = e.description \
+                if e.description != discord.Embed.Empty \
+                else ""
+
             cur_embed = await fill_out(channel, msg_embed, [
-                ("EMBED_R", str(e.colour.r)),
-                ("EMBED_G", str(e.colour.g)),
-                ("EMBED_B", str(e.colour.b)),
-                ("EMBED_TITLE", e.title),
+                ("EMBED_R", str(r)),
+                ("EMBED_G", str(g)),
+                ("EMBED_B", str(b)),
+                ("EMBED_TITLE", title),
                 ("EMBED_DESC", desc, PARSE_MODE_MARKDOWN),
                 ("EMBED_FIELDS", fields, []),
 

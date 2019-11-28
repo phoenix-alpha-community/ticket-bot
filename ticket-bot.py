@@ -7,6 +7,8 @@ import json
 import os.path
 import re
 import io
+import traceback
+import sys
 from discord.ext import commands
 from config import *  # imports token, description etc.
 from random import randrange
@@ -132,7 +134,6 @@ async def lock_ticket(rp):
     # Update reactions
     await rp.message.clear_reactions()
     await rp.message.add_reaction(Emojis.unlock)
-    await rp.message.add_reaction(Emojis.no_entry_sign)
 
     # Update permissions
     await rp.channel.set_permissions(ticket.staff,
@@ -150,33 +151,56 @@ async def lock_ticket(rp):
     embed = discord.Embed.from_dict({
         "title": "Ticket closed",
         "color": 0xFFFF00,
-        "description": "The ticket was closed and can only be re-opened by" \
-                       + " %s." % ticket.staff.mention
+        "description": f"The ticket was closed and can only be re-opened by " +
+                       f"{ticket.staff.mention}. " +
+                       f"Ticket deletion ({Emojis.no_entry_sign}) will be "+
+                       f"available after the transcript has been saved."
     })
     embed.add_field(name="Closed by", value=rp.member.mention, inline=True)
     embed.add_field(name="Transcript saved to",
                     value=ticket.transcript_channel.mention, inline=True)
     message = await rp.channel.send("", embed=embed)
 
-    # Delete previous transcripts
-    async for m in ticket.transcript_channel.history(limit=None):
-        for e in m.embeds:
-            if type(e.title) != str:
-                continue
-            match = re.match(r"Transcript: Ticket ([0-9]+)", e.title)
-            if match != None and int(match.group(1)) == ticket.id:
-                await m.delete()
-
-    # Save transcript
-    embed = ticket.to_log_embed("Transcript", 0xFF5E00, [("Saved by", rp.member.mention)])
-    transcript = await ce.generate_transcript(rp.channel, ticket)
-    f = discord.File(io.BytesIO(transcript.encode()),
-                     filename="transcript-%04d.html" % ticket.id)
-    await ticket.transcript_channel.send("", embed=embed, file=f)
-
     # Post log message
-    embed = ticket.to_log_embed("Locked", 0xFF5E00, [("Locked by", rp.member.mention)])
+    embed = ticket.to_log_embed("Locked", 0xFF5E00,
+                                [("Locked by", rp.member.mention)])
     await ticket.log_channel.send("", embed=embed)
+
+    # Generate transcript
+    try:
+        transcript = await ce.generate_transcript(rp.channel, ticket)
+    except Exception as e:
+        transcript = None
+        print("Error during transcript generation!", file=sys.stderr)
+        traceback.print_exc()
+        embed = discord.Embed.from_dict({
+            "title": "Transcript generation failed!",
+            "color": 0x4800FF,
+            "description": f"Tell someone from the programming team to check " +
+                           f"the logs! " +
+                           f"Ticket deletion will stay disabled for now."
+        })
+        message = await rp.channel.send("", embed=embed)
+
+    if transcript != None:
+        # Delete previous transcripts
+        async for m in ticket.transcript_channel.history(limit=None):
+            for e in m.embeds:
+                if type(e.title) != str:
+                    continue
+                match = re.match(r"Transcript: Ticket ([0-9]+)", e.title)
+                if match != None and int(match.group(1)) == ticket.id:
+                    await m.delete()
+
+        # Save transcript
+        embed = ticket.to_log_embed("Transcript", 0xFF5E00,
+                                    [("Saved by", rp.member.mention)])
+        f = discord.File(io.BytesIO(transcript.encode()),
+                        filename="transcript-%04d.html" % ticket.id)
+        await ticket.transcript_channel.send("", embed=embed, file=f)
+
+        # Enable deletion
+        await rp.message.add_reaction(Emojis.no_entry_sign)
 
 
 ##############################
@@ -277,8 +301,12 @@ async def delete_abort(rp):
 
 #@bot.command() # TODO: shit
 #async def shit(ctx):
-#    start_message = (await ctx.channel.history(limit=2, oldest_first=True).flatten())[1]
-#    print(start_message.content.encode())
+#    embed = discord.Embed.from_dict({
+#        "title": "title",
+#        "color": 0xFFFF00,
+#    })
+#    message = await ctx.send("s", embed=embed)
+
 
 #@bot.command() # TODO: cleartickets
 #async def cleartickets(ctx):
@@ -738,12 +766,17 @@ def get_user_ticket_count(user):
 
 def inc_user_ticket_count(user):
     state = get_state()
+    if str(user.id) not in state["user_ticket_count"]:
+        state["user_ticket_count"][str(user.id)] = 0
     state["user_ticket_count"][str(user.id)] += 1
     write_state(state)
 
 
 def dec_user_ticket_count(user):
     state = get_state()
+    if str(user.id) not in state["user_ticket_count"]:
+        print(f"[ERROR] Tried to decrease non-existing ticket count! ({user})")
+        state["user_ticket_count"][str(user.id)] = 0
     state["user_ticket_count"][str(user.id)] -= 1
     write_state(state)
 
