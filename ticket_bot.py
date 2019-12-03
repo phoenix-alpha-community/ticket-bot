@@ -632,8 +632,7 @@ class Ticket():
         embed.add_field(name=Strings.field_id, value=self.id, inline=True)
         embed.add_field(name=Strings.field_game, value=self.game, inline=True)
         embed.add_field(name=Strings.field_author,
-                        value=FakeMember(133713371337, self.staff.guild).mention, inline=True)
-                        #value=self.author.mention, inline=True)
+                        value=self.author.mention, inline=True)
         embed.add_field(name=Strings.field_staff,
                         value=self.staff.mention, inline=True)
         if len(self.additional_members) > 0:
