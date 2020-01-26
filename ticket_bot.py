@@ -648,7 +648,7 @@ class Ticket():
             "color": color,
         })
         embed.add_field(name="Game", value=self.game, inline=True)
-        embed.add_field(name="Ticket author", value=self.author.mention, inline=True)
+        embed.add_field(name="Ticket author", value=f"{self.author} {self.author.mention}", inline=True)
         for name, value in additional_fields:
             embed.add_field(name=name, value=value, inline=True)
 
