@@ -383,6 +383,9 @@ async def recount_error(ctx, error):
 
         commands.MissingRole: lambda:
         ctx.send("Insufficient rank permissions."),
+
+        commands.MissingAnyRole: lambda:
+        ctx.send("Insufficient rank permissions."),
     }
     await handle_error(ctx, error, error_handlers)
 
