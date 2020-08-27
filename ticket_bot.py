@@ -330,7 +330,7 @@ async def delete_abort(rp):
 # Purpose: Recounts all users' tickets, possibly fixing limit issues
 ##############################
 @bot.command()
-@commands.has_role(BOT_TICKET_MANAGER_ROLE)
+@commands.has_any_role(BOT_TICKET_MANAGER_ROLES)
 async def recount(ctx):
     old_counts = get_state()["user_ticket_count"]
     counts = {}
@@ -488,7 +488,7 @@ async def kick_error(ctx, error):
 # Purpose: Creates a new ticket menu
 ##############################
 @bot.command()
-@commands.has_role(BOT_TICKET_MANAGER_ROLE)
+@commands.has_any_role(BOT_TICKET_MANAGER_ROLES)
 async def ticketmenu(ctx, game_name: str, category_id: int,
                      log_channel: discord.TextChannel,
                      transcript_channel: discord.TextChannel,
