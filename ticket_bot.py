@@ -17,20 +17,25 @@ from importlib import import_module
 
 ce = import_module("chat-exporter")
 
-bot = commands.Bot(command_prefix=BOT_CMD_PREFIX, description=BOT_DESCRIPTION)
+bot = commands.Bot(
+    command_prefix=BOT_CMD_PREFIX,
+    description=BOT_DESCRIPTION,
+    intents=discord.Intents.all(),
+)
 
 
 @bot.event
 async def on_ready():
-    print('Logged in as')
+    print("Logged in as")
     print(bot.user.name)
     print(bot.user.id)
-    print('------')
+    print("------")
 
 
 ###############################################################################
 ## Bot commands
 ###############################################################################
+
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -73,8 +78,9 @@ async def create_ticket(rp):
     # check if user is over ticket limit
     count = get_user_ticket_count(rp.member)
     if count >= BOT_TICKET_MAX_PER_USER:
-        await rp.member.send("You're over ticket limit: %i/%i" \
-                             % (count, BOT_TICKET_MAX_PER_USER))
+        await rp.member.send(
+            "You're over ticket limit: %i/%i" % (count, BOT_TICKET_MAX_PER_USER)
+        )
         return
     else:
         inc_user_ticket_count(rp.member)
@@ -82,29 +88,25 @@ async def create_ticket(rp):
     support_role = rp.guild.get_role(ticket_type["support_role_id"])
 
     overwrites = {
-        rp.guild.default_role:
-            discord.PermissionOverwrite(read_messages=False,
-                                        send_messages=False),
-        support_role:
-            discord.PermissionOverwrite(read_messages=True,
-                                        send_messages=True),
-        rp.guild.me:
-            discord.PermissionOverwrite(read_messages=True,
-                                        send_messages=True),
-        rp.member:
-            discord.PermissionOverwrite(read_messages=True,
-                                        send_messages=True),
+        rp.guild.default_role: discord.PermissionOverwrite(
+            read_messages=False, send_messages=False
+        ),
+        support_role: discord.PermissionOverwrite(
+            read_messages=True, send_messages=True
+        ),
+        rp.guild.me: discord.PermissionOverwrite(
+            read_messages=True, send_messages=True
+        ),
+        rp.member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
     }
 
     ticket_id = get_and_inc_ticket_counter()
     channel = await rp.guild.create_text_channel(
-        "ticket-%04d" % (ticket_id % 10000),
-        category=category,
-        overwrites=overwrites)
+        "ticket-%04d" % (ticket_id % 10000), category=category, overwrites=overwrites
+    )
 
     # Post starting message
-    ticket = Ticket(ticket_id, game_name, rp.member,
-                    support_role, rp.guild)
+    ticket = Ticket(ticket_id, game_name, rp.member, support_role, rp.guild)
 
     message = await channel.send(rp.member.mention, embed=ticket.to_embed())
     await message.add_reaction(Emojis.lock)
@@ -124,8 +126,7 @@ async def lock_ticket(rp):
     ticket = await Ticket.from_start_message(rp.message)
 
     # only allow reactions from support staff and the author
-    if ticket.staff not in rp.member.roles \
-            and ticket.author != rp.member:
+    if ticket.staff not in rp.member.roles and ticket.author != rp.member:
         await rp.message.remove_reaction(rp.emoji, rp.member)
         return
 
@@ -136,36 +137,38 @@ async def lock_ticket(rp):
     await rp.message.add_reaction(Emojis.unlock)
 
     # Update permissions
-    await rp.channel.set_permissions(ticket.staff,
-                                     read_messages=True,
-                                     send_messages=False)
+    await rp.channel.set_permissions(
+        ticket.staff, read_messages=True, send_messages=False
+    )
     if not isinstance(ticket.author, FakeMember):
-        await rp.channel.set_permissions(ticket.author,
-                                        read_messages=True,
-                                        send_messages=False)
+        await rp.channel.set_permissions(
+            ticket.author, read_messages=True, send_messages=False
+        )
     for add_member in ticket.additional_members:
         if not isinstance(add_member, FakeMember):
-            await rp.channel.set_permissions(add_member,
-                                            read_messages=True,
-                                            send_messages=False)
+            await rp.channel.set_permissions(
+                add_member, read_messages=True, send_messages=False
+            )
 
     # Post closing message
-    embed = discord.Embed.from_dict({
-        "title": "Ticket closed",
-        "color": 0xFFFF00,
-        "description": f"The ticket was closed and can only be re-opened by " +
-                       f"{ticket.staff.mention}. " +
-                       f"Ticket deletion ({Emojis.no_entry_sign}) will be "+
-                       f"available after the transcript has been saved."
-    })
+    embed = discord.Embed.from_dict(
+        {
+            "title": "Ticket closed",
+            "color": 0xFFFF00,
+            "description": f"The ticket was closed and can only be re-opened by "
+            + f"{ticket.staff.mention}. "
+            + f"Ticket deletion ({Emojis.no_entry_sign}) will be "
+            + f"available after the transcript has been saved.",
+        }
+    )
     embed.add_field(name="Closed by", value=rp.member.mention, inline=True)
-    embed.add_field(name="Transcript saved to",
-                    value=ticket.transcript_channel.mention, inline=True)
+    embed.add_field(
+        name="Transcript saved to", value=ticket.transcript_channel.mention, inline=True
+    )
     message = await rp.channel.send("", embed=embed)
 
     # Post log message
-    embed = ticket.to_log_embed("Locked", 0xFF5E00,
-                                [("Locked by", rp.member.mention)])
+    embed = ticket.to_log_embed("Locked", 0xFF5E00, [("Locked by", rp.member.mention)])
     await ticket.log_channel.send("", embed=embed)
 
     # Generate transcript
@@ -175,13 +178,15 @@ async def lock_ticket(rp):
         transcript = None
         print("Error during transcript generation!", file=sys.stderr)
         traceback.print_exc()
-        embed = discord.Embed.from_dict({
-            "title": "Transcript generation failed!",
-            "color": 0x4800FF,
-            "description": f"Tell someone from the programming team to check " +
-                           f"the logs! " +
-                           f"Ticket deletion will stay disabled for now."
-        })
+        embed = discord.Embed.from_dict(
+            {
+                "title": "Transcript generation failed!",
+                "color": 0x4800FF,
+                "description": f"Tell someone from the programming team to check "
+                + f"the logs! "
+                + f"Ticket deletion will stay disabled for now.",
+            }
+        )
         message = await rp.channel.send("", embed=embed)
 
     if transcript != None:
@@ -195,10 +200,12 @@ async def lock_ticket(rp):
                     await m.delete()
 
         # Save transcript
-        embed = ticket.to_log_embed("Transcript", 0xFF5E00,
-                                    [("Saved by", rp.member.mention)])
-        f = discord.File(io.BytesIO(transcript.encode()),
-                        filename="transcript-%04d.html" % ticket.id)
+        embed = ticket.to_log_embed(
+            "Transcript", 0xFF5E00, [("Saved by", rp.member.mention)]
+        )
+        f = discord.File(
+            io.BytesIO(transcript.encode()), filename="transcript-%04d.html" % ticket.id
+        )
         await ticket.transcript_channel.send("", embed=embed, file=f)
 
         # Enable deletion
@@ -226,29 +233,33 @@ async def unlock_ticket(rp):
     await rp.message.add_reaction(Emojis.lock)
 
     # Update permissions
-    await rp.channel.set_permissions(ticket.staff,
-                                     read_messages=True,
-                                     send_messages=True)
+    await rp.channel.set_permissions(
+        ticket.staff, read_messages=True, send_messages=True
+    )
     if not isinstance(ticket.author, FakeMember):
-        await rp.channel.set_permissions(ticket.author,
-                                        read_messages=True,
-                                        send_messages=True)
+        await rp.channel.set_permissions(
+            ticket.author, read_messages=True, send_messages=True
+        )
     for add_member in ticket.additional_members:
         if not isinstance(add_member, FakeMember):
-            await rp.channel.set_permissions(add_members,
-                                            read_messages=True,
-                                            send_messages=True)
+            await rp.channel.set_permissions(
+                add_members, read_messages=True, send_messages=True
+            )
 
     # Post closing message
-    embed = discord.Embed.from_dict({
-        "title": "Ticket re-opened",
-        "color": 0xFFFF00,
-    })
+    embed = discord.Embed.from_dict(
+        {
+            "title": "Ticket re-opened",
+            "color": 0xFFFF00,
+        }
+    )
     embed.add_field(name="Re-opened by", value=rp.member.mention, inline=True)
     message = await rp.channel.send("", embed=embed)
 
     # Post log message
-    embed = ticket.to_log_embed("Unlocked", 0xFFD900, [("Unlocked by", rp.member.mention)])
+    embed = ticket.to_log_embed(
+        "Unlocked", 0xFFD900, [("Unlocked by", rp.member.mention)]
+    )
     await ticket.log_channel.send("", embed=embed)
 
 
@@ -282,7 +293,9 @@ async def delete_confirm(rp):
     await rp.channel.delete()
 
     # Post log message
-    embed = ticket.to_log_embed("Deleted", 0xFF0000, [("Deleted by", rp.member.mention)])
+    embed = ticket.to_log_embed(
+        "Deleted", 0xFF0000, [("Deleted by", rp.member.mention)]
+    )
     await ticket.log_channel.send("", embed=embed)
 
 
@@ -303,20 +316,20 @@ async def delete_abort(rp):
 # async def gib(ctx, shit):
 #    print(shit.encode())
 
-#@bot.command() # TODO: shit
-#async def shit(ctx):
+# @bot.command() # TODO: shit
+# async def shit(ctx):
 #    await ctx.send(bot.user.avatar_url)
 
 
-#@bot.command() # TODO: cleartickets
-#async def cleartickets(ctx):
+# @bot.command() # TODO: cleartickets
+# async def cleartickets(ctx):
 #    for channel in ctx.guild.channels:
 #        if channel.name.startswith("ticket-"):
 #            await channel.delete()
 
 
-#@bot.command() # TODO: bullshit
-#async def dump(ctx):
+# @bot.command() # TODO: bullshit
+# async def dump(ctx):
 #    start_message = (await ctx.channel.history(limit=1, oldest_first=True).flatten())[0]
 #    ticket = await Ticket.from_start_message(start_message)
 #    with open("test.html", "w") as f:
@@ -336,9 +349,11 @@ async def recount(ctx):
     counts = {}
     for channel in ctx.guild.channels:
         if channel.name.startswith("ticket-"):
-            start_message = (await channel.history(limit=1, oldest_first=True).flatten())[0]
+            start_message = (
+                await channel.history(limit=1, oldest_first=True).flatten()
+            )[0]
             if any([r.emoji == Emojis.unlock for r in start_message.reactions]):
-                continue # ignore locked tickets
+                continue  # ignore locked tickets
             ticket = await Ticket.from_start_message(start_message)
             if str(ticket.author.id) not in counts:
                 counts[str(ticket.author.id)] = 0
@@ -360,32 +375,32 @@ async def recount(ctx):
             difference = c - counts[id]
 
         if difference != 0:
-            description += "- Fixed %s: %d\n" \
-                           % (ctx.guild.get_member(int(id)) \
-                              or FakeMember(int(id), ctx.guild), difference)
+            description += "- Fixed %s: %d\n" % (
+                ctx.guild.get_member(int(id)) or FakeMember(int(id), ctx.guild),
+                difference,
+            )
 
     if fixes == 0:
         description += "No changes."
 
-    embed = discord.Embed.from_dict({
-        "title": "Recount finished",
-        "color": 0x00FFFF,
-        "description": description,
-    })
+    embed = discord.Embed.from_dict(
+        {
+            "title": "Recount finished",
+            "color": 0x00FFFF,
+            "description": description,
+        }
+    )
     await ctx.send("", embed=embed)
 
 
 @recount.error
 async def recount_error(ctx, error):
     error_handlers = {
-        commands.errors.MissingRequiredArgument: lambda:
-        send_usage_help(ctx, "recount", ""),
-
-        commands.MissingRole: lambda:
-        ctx.send("Insufficient rank permissions."),
-
-        commands.MissingAnyRole: lambda:
-        ctx.send("Insufficient rank permissions."),
+        commands.errors.MissingRequiredArgument: lambda: send_usage_help(
+            ctx, "recount", ""
+        ),
+        commands.MissingRole: lambda: ctx.send("Insufficient rank permissions."),
+        commands.MissingAnyRole: lambda: ctx.send("Insufficient rank permissions."),
     }
     await handle_error(ctx, error, error_handlers)
 
@@ -408,30 +423,26 @@ async def invite(ctx, user: discord.User):
     if ticket.staff not in ctx.author.roles:
         raise commands.MissingRole(ticket.staff.name)
 
-    await ctx.channel.set_permissions(user,
-                                      read_messages=True,
-                                      send_messages=True)
+    await ctx.channel.set_permissions(user, read_messages=True, send_messages=True)
     await ticket.add_members(user, start_message)
     await ctx.send("Added %s to this ticket." % user.mention)
 
     # Post log message
-    embed = ticket.to_log_embed("Invite", 0xce0fce,
-                                [("Inviter", ctx.author.mention),
-                                 ("Invitee", user.mention)])
+    embed = ticket.to_log_embed(
+        "Invite", 0xCE0FCE, [("Inviter", ctx.author.mention), ("Invitee", user.mention)]
+    )
     await ticket.log_channel.send("", embed=embed)
 
 
 @invite.error
 async def invite_error(ctx, error):
     error_handlers = {
-        commands.errors.MissingRequiredArgument: lambda:
-        send_usage_help(ctx, "invite", "@USER"),
-        commands.errors.BadArgument: lambda:
-        send_usage_help(ctx, "invite", "@USER"),
-        commands.MissingRole: lambda:
-        ctx.send("Insufficient rank permissions."),
-        WrongChannelError: lambda:
-        ctx.send("Command used in wrong channel"),
+        commands.errors.MissingRequiredArgument: lambda: send_usage_help(
+            ctx, "invite", "@USER"
+        ),
+        commands.errors.BadArgument: lambda: send_usage_help(ctx, "invite", "@USER"),
+        commands.MissingRole: lambda: ctx.send("Insufficient rank permissions."),
+        WrongChannelError: lambda: ctx.send("Command used in wrong channel"),
     }
     await handle_error(ctx, error, error_handlers)
 
@@ -454,32 +465,27 @@ async def kick(ctx, user: discord.User):
 
     if user not in ticket.additional_members:
         raise UserNotInTicketError()
-    await ctx.channel.set_permissions(user,
-                                      read_messages=False,
-                                      send_messages=False)
+    await ctx.channel.set_permissions(user, read_messages=False, send_messages=False)
     await ticket.remove_members(user, start_message)
     await ctx.send("Kicked %s from this ticket." % user.mention)
 
     # Post log message
-    embed = ticket.to_log_embed("Kick", 0x9c0f9c,
-                                [("Kicker", ctx.author.mention),
-                                 ("Kickee", user.mention)])
+    embed = ticket.to_log_embed(
+        "Kick", 0x9C0F9C, [("Kicker", ctx.author.mention), ("Kickee", user.mention)]
+    )
     await ticket.log_channel.send("", embed=embed)
 
 
 @kick.error
 async def kick_error(ctx, error):
     error_handlers = {
-        commands.errors.MissingRequiredArgument: lambda:
-        send_usage_help(ctx, "kick", "@USER"),
-        commands.errors.BadArgument: lambda:
-        send_usage_help(ctx, "kick", "@USER"),
-        UserNotInTicketError: lambda:
-        ctx.send("User not in ticket."),
-        WrongChannelError: lambda:
-        ctx.send("Command used in wrong channel"),
-        commands.MissingRole: lambda:
-        ctx.send("Insufficient rank permissions."),
+        commands.errors.MissingRequiredArgument: lambda: send_usage_help(
+            ctx, "kick", "@USER"
+        ),
+        commands.errors.BadArgument: lambda: send_usage_help(ctx, "kick", "@USER"),
+        UserNotInTicketError: lambda: ctx.send("User not in ticket."),
+        WrongChannelError: lambda: ctx.send("Command used in wrong channel"),
+        commands.MissingRole: lambda: ctx.send("Insufficient rank permissions."),
     }
     await handle_error(ctx, error, error_handlers)
 
@@ -492,16 +498,22 @@ async def kick_error(ctx, error):
 ##############################
 @bot.command()
 @commands.has_any_role(*BOT_TICKET_MANAGER_ROLES)
-async def ticketmenu(ctx, game_name: str, category_id: int,
-                     log_channel: discord.TextChannel,
-                     transcript_channel: discord.TextChannel,
-                     support_role: discord.Role):
-    embed = discord.Embed.from_dict({
-        "title": "Ticket Menu: %s" % game_name,
-        "color": 0x0000FF,
-        "description": "React with %s to create a new ticket for %s." \
-                       % (Emojis.envelope_with_arrow, game_name)
-    })
+async def ticketmenu(
+    ctx,
+    game_name: str,
+    category_id: int,
+    log_channel: discord.TextChannel,
+    transcript_channel: discord.TextChannel,
+    support_role: discord.Role,
+):
+    embed = discord.Embed.from_dict(
+        {
+            "title": "Ticket Menu: %s" % game_name,
+            "color": 0x0000FF,
+            "description": "React with %s to create a new ticket for %s."
+            % (Emojis.envelope_with_arrow, game_name),
+        }
+    )
 
     state = get_state()
     state["ticket_types"][game_name] = {
@@ -518,17 +530,20 @@ async def ticketmenu(ctx, game_name: str, category_id: int,
 
 @ticketmenu.error
 async def ticketmenu_error(ctx, error):
-    argument_syntax = "GAME_NAME CATEGORY_ID" \
-                        + " #LOG_CHANNEL" \
-                        + " #TRANSCRIPT_CHANNEL" \
-                        + " @SUPPORT_ROLE"
+    argument_syntax = (
+        "GAME_NAME CATEGORY_ID"
+        + " #LOG_CHANNEL"
+        + " #TRANSCRIPT_CHANNEL"
+        + " @SUPPORT_ROLE"
+    )
     error_handlers = {
-        commands.errors.MissingRequiredArgument: lambda:
-        send_usage_help(ctx, "ticketmenu", argument_syntax),
-        commands.errors.BadArgument: lambda:
-        send_usage_help(ctx, "ticketmenu", argument_syntax),
-        commands.MissingRole: lambda:
-        ctx.send("Insufficient rank permissions."),
+        commands.errors.MissingRequiredArgument: lambda: send_usage_help(
+            ctx, "ticketmenu", argument_syntax
+        ),
+        commands.errors.BadArgument: lambda: send_usage_help(
+            ctx, "ticketmenu", argument_syntax
+        ),
+        commands.MissingRole: lambda: ctx.send("Insufficient rank permissions."),
     }
     await handle_error(ctx, error, error_handlers)
 
@@ -553,8 +568,10 @@ async def handle_error(ctx, error, error_handlers):
 # Purpose: Send an error message to the current chat
 ##############################
 def send_error_unknown(ctx):
-    return send_error(ctx, "Unknown error. Tell someone from the programming" \
-                      + " team to check the logs.")
+    return send_error(
+        ctx,
+        "Unknown error. Tell someone from the programming" + " team to check the logs.",
+    )
 
 
 ##############################
@@ -572,8 +589,9 @@ def send_error(ctx, text):
 # Purpose: Send a usage help to the current chat
 ##############################
 def send_usage_help(ctx, function_name, argument_structure):
-    return ctx.send("Usage: `%s%s %s`" \
-                    % (BOT_CMD_PREFIX, function_name, argument_structure))
+    return ctx.send(
+        "Usage: `%s%s %s`" % (BOT_CMD_PREFIX, function_name, argument_structure)
+    )
 
 
 ##############################
@@ -584,18 +602,19 @@ def send_usage_help(ctx, function_name, argument_structure):
 #          Can be used to create the starting message embed and can be
 #          reconstructed from that embed.
 ##############################
-class Ticket():
-    def __init__(self, ticket_id, game_name, author,
-                 staff, guild, additional_members=set()):
+class Ticket:
+    def __init__(
+        self, ticket_id, game_name, author, staff, guild, additional_members=set()
+    ):
         self.id = ticket_id
         self.game = game_name
         self.author = author
         self.staff = staff
-        log_channel_id \
-            = get_state()["ticket_types"][self.game]["log_channel_id"]
+        log_channel_id = get_state()["ticket_types"][self.game]["log_channel_id"]
         self.log_channel = guild.get_channel(log_channel_id)
-        transcript_channel_id \
-            = get_state()["ticket_types"][self.game]["transcript_channel_id"]
+        transcript_channel_id = get_state()["ticket_types"][self.game][
+            "transcript_channel_id"
+        ]
         self.transcript_channel = guild.get_channel(transcript_channel_id)
         self.additional_members = additional_members
 
@@ -605,53 +624,63 @@ class Ticket():
         # fucking kill me please this is horrible coding
         add_members = set()
         for f in embed.fields:
-            if f.name == Strings.field_id: ticket_id = int(f.value)
-            if f.name == Strings.field_game: game = f.value
+            if f.name == Strings.field_id:
+                ticket_id = int(f.value)
+            if f.name == Strings.field_game:
+                game = f.value
             if f.name == Strings.field_author:
                 author_id = user_snowflake_to_id(f.value)
-                author = message.guild.get_member(author_id) \
-                    or FakeMember(author_id, message.guild)
+                author = message.guild.get_member(author_id) or FakeMember(
+                    author_id, message.guild
+                )
             if f.name == Strings.field_staff:
                 staff_id = int(f.value[3:-1])
                 staff = message.guild.get_role(staff_id)
             if f.name == Strings.field_additional_members:
                 add_members = f.value.split(" ")
-                add_members = [message.guild.get_member(user_snowflake_to_id(id)) \
-                               or FakeMember(id, message.guild)
-                               for id in add_members]
+                add_members = [
+                    message.guild.get_member(user_snowflake_to_id(id))
+                    or FakeMember(id, message.guild)
+                    for id in add_members
+                ]
                 add_members = set(add_members)
 
-        return Ticket(ticket_id, game, author, staff,
-                      message.guild, add_members)
-
+        return Ticket(ticket_id, game, author, staff, message.guild, add_members)
 
     def to_embed(self):
-        embed = discord.Embed.from_dict({
-            "title": "Ticket ID: %d" % self.id,
-            "color": 0x00FF00,
-            "description": "If your issue has been resolved, you can close" \
-                           + " this ticket with %s." % Emojis.lock
-        })
+        embed = discord.Embed.from_dict(
+            {
+                "title": "Ticket ID: %d" % self.id,
+                "color": 0x00FF00,
+                "description": "If your issue has been resolved, you can close"
+                + " this ticket with %s." % Emojis.lock,
+            }
+        )
         embed.add_field(name=Strings.field_id, value=self.id, inline=True)
         embed.add_field(name=Strings.field_game, value=self.game, inline=True)
-        embed.add_field(name=Strings.field_author,
-                        value=self.author.mention, inline=True)
-        embed.add_field(name=Strings.field_staff,
-                        value=self.staff.mention, inline=True)
+        embed.add_field(
+            name=Strings.field_author, value=self.author.mention, inline=True
+        )
+        embed.add_field(name=Strings.field_staff, value=self.staff.mention, inline=True)
         if len(self.additional_members) > 0:
             s = " ".join([x.mention for x in self.additional_members])
-            embed.add_field(name=Strings.field_additional_members,
-                            value=s, inline=True)
+            embed.add_field(name=Strings.field_additional_members, value=s, inline=True)
 
         return embed
 
     def to_log_embed(self, log_prefix, color, additional_fields=[]):
-        embed = discord.Embed.from_dict({
-            "title": "%s: Ticket %d" % (log_prefix, self.id),
-            "color": color,
-        })
+        embed = discord.Embed.from_dict(
+            {
+                "title": "%s: Ticket %d" % (log_prefix, self.id),
+                "color": color,
+            }
+        )
         embed.add_field(name="Game", value=self.game, inline=True)
-        embed.add_field(name="Ticket author", value=f"{self.author} {self.author.mention}", inline=True)
+        embed.add_field(
+            name="Ticket author",
+            value=f"{self.author} {self.author.mention}",
+            inline=True,
+        )
         for name, value in additional_fields:
             embed.add_field(name=name, value=value, inline=True)
 
@@ -679,12 +708,13 @@ def user_snowflake_to_id(snowflake):
 # DateCreated: 11/16/2019
 # Purpose: Compensates for having to use on_raw_reaction_add
 ##############################
-class ReactionPayload():
+class ReactionPayload:
     # this might be a bit heavy on the API
     async def _init(self, payload):
         self.guild = bot.get_guild(payload.guild_id)
-        self.member = self.guild.get_member(payload.user_id) \
-            or FakeMember(payload.user_id, self.guild)
+        self.member = self.guild.get_member(payload.user_id) or FakeMember(
+            payload.user_id, self.guild
+        )
         self.emoji = payload.emoji
         self.channel = bot.get_channel(payload.channel_id)
         self.message = await self.channel.fetch_message(payload.message_id)
@@ -697,17 +727,17 @@ async def unwrap_payload(payload):
     return rp
 
 
-class Emojis():
-    envelope_with_arrow = b'\xf0\x9f\x93\xa9'.decode()
-    lock = b'\xf0\x9f\x94\x92'.decode()
-    unlock = b'\xf0\x9f\x94\x93'.decode()
-    flag_eu = b'\xf0\x9f\x87\xaa\xf0\x9f\x87\xba'.decode()
-    white_check_mark = b'\xe2\x9c\x85'.decode()
-    negative_squared_cross_mark = b'\xe2\x9d\x8e'.decode()
-    no_entry_sign = b'\xf0\x9f\x9a\xab'.decode()
+class Emojis:
+    envelope_with_arrow = b"\xf0\x9f\x93\xa9".decode()
+    lock = b"\xf0\x9f\x94\x92".decode()
+    unlock = b"\xf0\x9f\x94\x93".decode()
+    flag_eu = b"\xf0\x9f\x87\xaa\xf0\x9f\x87\xba".decode()
+    white_check_mark = b"\xe2\x9c\x85".decode()
+    negative_squared_cross_mark = b"\xe2\x9d\x8e".decode()
+    no_entry_sign = b"\xf0\x9f\x9a\xab".decode()
 
 
-class Strings():
+class Strings:
     field_id = "ID"
     field_game = "Game"
     field_author = "Ticket author"
@@ -725,7 +755,7 @@ emoji_handlers = {
 }
 
 
-class FakeMember():
+class FakeMember:
     def __init__(self, id, guild):
         self.nick = "(user that left)"
         self.name = self.nick
@@ -746,11 +776,13 @@ class FakeMember():
 ##############################
 def get_state():
     # default state
-    state = json.dumps({
-        "ticket_counter": 0,
-        "ticket_types": {},
-        "user_ticket_count": {},
-    })
+    state = json.dumps(
+        {
+            "ticket_counter": 0,
+            "ticket_types": {},
+            "user_ticket_count": {},
+        }
+    )
 
     # read state
     filename = "state.txt"
@@ -809,6 +841,6 @@ class UserNotInTicketError(commands.CommandError):
 class WrongChannelError(commands.CommandError):
     pass
 
+
 if __name__ == "__main__":
     bot.run(BOT_TOKEN)
-
