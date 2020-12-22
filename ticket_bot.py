@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
+import chat_exporter
 import discord
-import discord.utils as utils
-import typing
 import json
 import os.path
 import re
@@ -11,11 +10,6 @@ import traceback
 import sys
 from discord.ext import commands
 from config import *  # imports token, description etc.
-from random import randrange
-from tempfile import TemporaryFile
-from importlib import import_module
-
-ce = import_module("chat-exporter")
 
 bot = commands.Bot(
     command_prefix=BOT_CMD_PREFIX,
@@ -30,6 +24,7 @@ async def on_ready():
     print(bot.user.name)
     print(bot.user.id)
     print("------")
+    chat_exporter.init_exporter(bot)
 
 
 ###############################################################################
@@ -173,7 +168,7 @@ async def lock_ticket(rp):
 
     # Generate transcript
     try:
-        transcript = await ce.generate_transcript(rp.channel, ticket)
+        transcript = await chat_exporter.generate_transcript(rp.channel)
     except Exception as e:
         transcript = None
         print("Error during transcript generation!", file=sys.stderr)
@@ -189,14 +184,14 @@ async def lock_ticket(rp):
         )
         message = await rp.channel.send("", embed=embed)
 
-    if transcript != None:
+    if transcript is not None:
         # Delete previous transcripts
         async for m in ticket.transcript_channel.history(limit=None):
             for e in m.embeds:
                 if type(e.title) != str:
                     continue
                 match = re.match(r"Transcript: Ticket ([0-9]+)", e.title)
-                if match != None and int(match.group(1)) == ticket.id:
+                if match is not None and int(match.group(1)) == ticket.id:
                     await m.delete()
 
         # Save transcript
@@ -243,7 +238,7 @@ async def unlock_ticket(rp):
     for add_member in ticket.additional_members:
         if not isinstance(add_member, FakeMember):
             await rp.channel.set_permissions(
-                add_members, read_messages=True, send_messages=True
+                add_member, read_messages=True, send_messages=True
             )
 
     # Post closing message
