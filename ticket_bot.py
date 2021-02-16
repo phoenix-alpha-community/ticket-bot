@@ -168,7 +168,9 @@ async def lock_ticket(rp):
 
     # Generate transcript
     try:
-        transcript = await chat_exporter.generate_transcript(rp.channel)
+        transcript = await chat_exporter.export(
+            channel=rp.channel, set_timezone="America/Chicago"
+        )
     except Exception as e:
         transcript = None
         print("Error during transcript generation!", file=sys.stderr)
